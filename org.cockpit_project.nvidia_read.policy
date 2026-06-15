@@ -1,0 +1,15 @@
+<!--
+  Policy for cockpit-nvidia plugin.
+  SPDX-License-Identifier: LGPL-2.1-or-later
+-->
+<policy>
+  <action id="org.cockpit_project.nvidia_read">
+    <description>Read NVIDIA GPU sensor data</description>
+    <message>Authentication required to read NVIDIA GPU sensor data</message>
+    <defaults>
+      <allow_any>yes</allow_any>
+      <allow_inactive>yes</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+</policy>

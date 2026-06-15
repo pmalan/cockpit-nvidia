@@ -1,0 +1,29 @@
+{
+    "name": "nvidia",
+    "requires": {
+        "cockpit": "266"
+    },
+    "priority": 90,
+    "menu": {
+        "index": {
+            "label": "NVIDIA GPU",
+            "order": 51,
+            "docs": [
+                {
+                    "label": "nvidia-smi docs",
+                    "url": "https://docs.nvidia.com/deploy/nvidia-smi/index.html"
+                }
+            ],
+            "keywords": [
+                {
+                    "matches": ["gpu", "nvidia", "utilization", "temperature", "vulkan", "cuda", "compute"]
+                }
+            ]
+        }
+    },
+    "tools": {
+        "index": {
+            "label": "NVIDIA GPU"
+        }
+    }
+}

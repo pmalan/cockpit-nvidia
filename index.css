@@ -1,0 +1,111 @@
+/* cockpit-nvidia styles - DENSE card grid */
+
+#nvidia-content {
+    max-width: 1400px;
+    margin: auto;
+    padding: 0.5rem;
+}
+
+.sensor-status-line {
+    font-size: 0.8rem;
+    color: #6a6e73;
+    margin-bottom: 0.5rem;
+    min-height: 1.25rem;
+}
+
+/* Wide cards for sparklines */
+.gpu-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(800px, 1fr));
+    gap: 0.75rem;
+}
+
+/* Dense card */
+.gpu-card {
+    border: 1px solid var(--pf-t--global--Border--color--secondary, #e3e3e3);
+    border-radius: 6px;
+    background: transparent;
+    overflow: hidden;
+}
+
+.gpu-card-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4rem 1rem;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+
+.gpu-name { font-weight: 700; font-size: 0.95rem; }
+.gpu-timestamp { font-size: 0.75rem; color: #6a6e73; white-space: nowrap; margin-left: 1rem; }
+
+/* Dense metric rows - label/value left, sparkline right */
+.gpu-metrics { padding: 0 1rem 0.2rem; }
+
+.gpu-metric-row {
+    display: flex;
+    align-items: center;
+    height: 30px;
+    margin-top: 15px;
+}
+
+.metric-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #8b8f93;
+    width: 45px;
+    flex-shrink: 0;
+}
+
+.metric-value {
+    font-weight: 700;
+    font-size: 0.9rem;
+    width: 45px;
+    text-align: right;
+    margin-right: 2px;
+}
+
+.metric-unit {
+    font-weight: 400;
+    color: #6a6e73;
+    font-size: 0.7rem;
+    width: 35px;
+    flex-shrink: 0;
+}
+
+.sparkline-wrapper {
+    flex: 1;
+    min-width: 200px;
+    margin-left: 8px;
+}
+
+.sparkline-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* Sparkline line */
+.sparkline-line { stroke-width: 1.5; fill: none; }
+/* Sparkline area — solid, no opacity */
+.sparkline-area { fill-opacity: 1; }
+
+/* Sparkline colors — slightly toned down for readability */
+.sparkline-svg.pf-m-color--info .sparkline-line,
+.sparkline-svg.pf-m-color--info .sparkline-area   { stroke: #4a90d9; fill: #4a90d9; }
+.sparkline-svg.pf-m-color--success .sparkline-line,
+.sparkline-svg.pf-m-color--success .sparkline-area  { stroke: #5cb87c; fill: #5cb87c; }
+.sparkline-svg.pf-m-color--warning .sparkline-line,
+.sparkline-svg.pf-m-color--warning .sparkline-area  { stroke: #f0ad4e; fill: #f0ad4e; }
+.sparkline-svg.pf-m-color--danger .sparkline-line,
+.sparkline-svg.pf-m-color--danger .sparkline-area   { stroke: #d9534f; fill: #d9534f; }
+.sparkline-svg.pf-m-color--secondary .sparkline-line,
+.sparkline-svg.pf-m-color--secondary .sparkline-area { stroke: #7a7a7a; fill: #7a7a7a; }
+.sparkline-svg.pf-m-color--black-400 .sparkline-line,
+.sparkline-svg.pf-m-color--black-400 .sparkline-area { stroke: #5c5c5c; fill: #5c5c5c; }
+
+/* Loading blink */
+@keyframes blink-warn { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.status-loading { animation: blink-warn 1.2s ease-in-out infinite; color: #6a6e73;}
+
+.no-gpu-msg { text-align: center; padding: 3rem; color: #6a6e73; font-style: italic; }

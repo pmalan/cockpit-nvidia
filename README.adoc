@@ -1,0 +1,213 @@
+= cockpit-nvidia
+
+A cockpit-ws plugin that displays real-time NVIDIA GPU metrics (utilization, memory, temperature, power) via nvidia-smi with sparkline history charts.
+
+== Prerequisites
+
+=== Install NVIDIA driver
+
+The NVIDIA proprietary driver must be installed. This plugin uses `nvidia-smi` — it will not work on systems without the driver.
+
+[source,bash]
+----
+# RHEL/CentOS stream
+sudo dnf install epel-release -y
+sudo dnf config-manager --set-enabled nux-dextop
+sudo dnf install nvidia-driver
+
+# Or download from https://www.nvidia.com/Download/index.aspx
+# After installation, reboot:
+sudo shutdown -r now
+----
+
+Verify the driver is loaded and `nvidia-smi` is available:
+
+[source,bash]
+----
+/usr/bin/nvidia-smi
+----
+
+You should see a table listing all NVIDIA GPUs detected. Example output from a system with 3 GPUs:
+
+....
++-----------------------------------------------------------------------------+
+| NVIDIA-SMI 570.124.04   Driver Version: 570.124.04   CUDA Version: 12.9  |
+|-------------------------------+----------------------+----------------------+
+| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Corr.. |
+|===                             +======================+======================+
+|   0  NVIDIA GeForce RTX 5080     Off | 00000000:01:00.0  On |
+|   1  Quadro RTX 4000              Off | 00000000:02:00.0 Off |
+|   2  Quadro RTX 4000              Off | 00000000:03:00.0 Off |
++-----------------------------------------------------------------------------+
+....
+
+=== Verify nvidia-smi location
+
+The plugin expects `nvidia-smi` at `/usr/bin/nvidia-smi`. If it is installed elsewhere (e.g., `/opt/bin/nvidia-smi`), update the path in `index.js`:
+
+[source,javascript]
+----
+cockpit.spawn(["/opt/bin/nvidia-smi", ...], { superuser: "root" })
+----
+
+=== Install lm_sensors (optional)
+
+nvidia-smi is a standalone binary — no additional dependencies are needed beyond the NVIDIA driver package.
+
+== Install the Cockpit NVIDIA Plugin
+
+=== Automatic install
+
+[source,bash]
+----
+cd cockpit-nvidia
+sudo ./install.sh
+----
+
+This will:
+
+1. Create `/usr/share/cockpit/cockpit-nvidia/` with all plugin files
+2. Install polkit policy for root-level nvidia-smi access
+3. Restart the cockpit.socket service
+
+=== Manual install
+
+.Install the plugin into the Cockpit plugins directory:
+
+[source,bash]
+----
+sudo mkdir -p /usr/share/cockpit/cockpit-nvidia
+sudo cp manifest.json index.html index.js index.css /usr/share/cockpit/cockpit-nvidia/
+sudo cp org.cockpit_project.nvidia_read.policy /usr/share/polkit-1/actions/org.cockpit_project.nvidia_read.policy
+----
+
+.Restart Cockpit:
+
+[source,bash]
+----
+sudo systemctl restart cockpit.socket
+----
+
+== Usage
+
+Open https://localhost:9090 in a browser and click "NVIDIA GPU" from the sidebar. The plugin displays:
+
+* Compact cards — one per GPU (RTX, Quadro, Tesla, etc.)
+* Six metrics per card: **GPU Util**, **DRAM** (bandwidth), **Temp**, **Power**, **Mem Used**, **Mem Free**
+* Sparkline history charts showing the last 12 data points per metric
+* Auto-refresh every 5 seconds
+
+Sparkline colors by metric type:
+
+|===
+|Metric|Color
+
+| GPU Util | Blue (info)
+| DRAM | Green (success)
+| Temp | Yellow (warning)
+| Power Draw | Red (danger)
+| Mem Used | Gray (secondary)
+| Mem Free | Dark gray (black-400)
+|===
+
+== Requirements
+
+|===
+|Requirement|Details
+
+| `nvidia-smi` binary | Must be at `/usr/bin/nvidia-smi` or path updated in source. Part of NVIDIA proprietary driver packages. Does NOT work with open-source Nouveau drivers — proprietary nvidia-driver is required.
+| Proprietary NVIDIA driver | nvidia-smi only exists in the NVIDIA proprietary driver. Open-source `nouveau` does not provide nvidia-smi.
+| Root access (polkit) | The plugin requires root privileges to execute nvidia-smi, enforced via polkit policy file `org.cockpit_project.nvidia_read.policy`.
+| Running NVIDIA kernel modules | At least one NVIDIA device must be enumerated: check with `lsmod | grep nvidia`.
+| Browser with localStorage | GPU history (last 12 data points per metric) is stored in browser localStorage per GPU name.
+|===
+
+== Development
+
+=== Build and install
+
+[source,bash]
+----
+cd cockpit-nvidia
+make install    # builds + deploys to /usr/share/cockpit/cockpit-nvidia/
+make dist       # creates tarball for RPM packaging
+make clean      # removes build artifacts
+----
+
+=== Test nvidia-smi format manually
+
+The plugin relies on the CSV output with no header and no units:
+
+[source,bash]
+----
+sudo /usr/bin/nvidia-smi \
+  --query-gpu=timestamp,name,utilization.gpu,useilzation.memory,temperature.gpu,power.draw,memory.used,memory.free \
+  --format=csv,noheader,nounits
+----
+
+Expected output (8 CSV columns per line):
+
+[source,csv]
+----
+2026/06/12 12:10:24.305,NVIDIA GeForce RTX 5080,16,7,56,79.57,13406 MiB,2473 MiB
+2026/06/12 12:10:24.298,Quadro RTX 4000,31,7,67,45.84,6578 MiB,1218 MiB
+----
+
+=== Polkit policy for nvidia-smi access
+
+The polkit action ID is `org.cockpit_project.nvidia_read`. The policy file grants root-level access:
+
+[source,json]
+----
+{
+  "org.cockpit_project.nvidia_read": {
+    "description": "Read NVIDIA GPU sensor data",
+    "message": "Authentication is required to read NVIDIA GPU data",
+    "defaults": {
+      "any": "auth-root",
+      "authenticated": "auth-admin",
+      ...
+----
+
+== Troubleshooting
+
+*"No GPU data received"* — nvidia-smi returned no results. Verify:
+
+[source,bash]
+----
+sudo nvidia-smi  # must output a valid table, not an error like "NVRM API not found"
+lsmod | grep nvidia
+----
+
+*"Loading NVIDIA GPU data → not-found"* — nvidia-smi binary is missing at /usr/bin/nvidia-smi. Install the proprietary driver or update the path in index.js.
+
+*White page with errors in browser console* — Check polkit policy deployment:
+
+[source,bash]
+----
+ls -la /usr/share/polkit-1/actions/org.cockpit_project.nvidia_read.policy
+cat /usr/share/polkit-1/actions/org.cockpit_project.nvidia_read.policy
+sudo cat cockpit-nvidia/index.js | grep "spawn.*nvidia-smi"
+----
+
+*Sparkline charts appear as blank rectangles or tiny dots* — Hard refresh (Ctrl+Shift+R) to clear Chrome's bundle cache.
+
+*Page shows no sparkline history* — First visit populates history; data accumulates 12 points per metric over time at ~5 minute intervals.
+
+== Files
+
+|===
+|File|Description
+
+| `manifest.json` | Plugin manifest with metadata, menu config, and keywords
+| `index.html` | Plugin UI shell with cockpit framework refs
+| `index.js` | Main logic: nvidia-smi CSV parsing, sparkline history rendering, per-GPU cards
+| `index.css` | Compact card layout styles with dark mode support via Cockpit design tokens
+| `install.sh` | Automated setup script (checks nvidia-smi + systemctl restart)
+| `org.cockpit_project.nvidia_read.policy` | Polkit policy for root-level nvidia-smi access + cockpit spawn permissions
+| `Makefile` | Build helpers (make install, make dist, make clean)
+|===
+
+== License
+
+LGPL-2.1-or-later OR MIT
