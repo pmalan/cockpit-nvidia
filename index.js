@@ -1,5 +1,5 @@
-	var REFRESH_HISTORY = 12;
-	var POLL_INTERVAL = 5000;
+	var REFRESH_HISTORY = 24;
+	var POLL_INTERVAL = 1000;
 	var storageKey = "cockpit-nvidia-sparkline-history";
 
 	var COLUMNS = [
@@ -9,6 +9,7 @@
 		{ key: "utilization.memory",  parse: "number" },
 		{ key: "temperature.gpu",      parse: "number" },
 		{ key: "power.draw",            parse: "number" },
+		{ key: "power.max_limit",       parse: "number" },
 		{ key: "memory.used",           parse: "number" },
 		{ key: "memory.free",             parse: "number" }
 	];
@@ -40,6 +41,13 @@
 		return values.map(function(v) { return v / max; });
 	}
 
+	function normalizeForSparklineByMax(values, scaleMax) {
+		if (!values || values.length === 0) return [];
+		scaleMax = scaleMax || Math.max.apply(null, values);
+		if (scaleMax <= 0) scaleMax = 1;
+		return values.map(function(v) { return v / scaleMax; });
+	}
+
 	function createSparklineSvg(values, metricKey, colorClass, width, height) {
 		width = width || 200;
 		height = height || 40;
@@ -49,6 +57,37 @@
 		}
 
 		var normalized = normalizeForSparkline(values, metricKey);
+		var n = normalized.length;
+		if (n === 1) {
+			var x0 = String((width / 2).toFixed(1)), y0 = String(((height - 4) - normalized[0] * (height - 8)).toFixed(1));
+			return '<svg class="sparkline-svg ' + colorClass + '" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none">' +
+				'<circle cx="' + x0 + '" cy="' + y0 + '" r="2" fill="currentColor" /></svg>';
+		}
+		var stepX = width / (n - 1);
+		var pathD = "M ";
+		for (var i = 0; i < n; i++) {
+			var x = (i * stepX).toFixed(1);
+			var yVal = ((height - 4) - normalized[i] * (height - 8)).toFixed(1);
+			pathD += x + "," + yVal;
+			if (i < n - 1) pathD += " L ";
+		}
+		var areaD = pathD + " L " + ((n-1)*stepX).toFixed(1) + "," + height.toFixed(1) + " L 0," + height.toFixed(1);
+
+		return '<svg class="sparkline-svg ' + colorClass + '" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none">' +
+			'<path d="' + areaD + '" class="sparkline-area" />' +
+			'<path d="' + pathD + '" class="sparkline-line" fill="none" stroke-width="1.5" />' +
+			"</svg>";
+	}
+
+	function createSparklineSvgByMax(values, scaleMax, colorClass, width, height) {
+		width = width || 200;
+		height = height || 40;
+
+		if (!values || values.length === 0) {
+			return '<svg class="sparkline-svg ' + colorClass + '" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none"></svg>';
+		}
+
+		var normalized = normalizeForSparklineByMax(values, scaleMax);
 		var n = normalized.length;
 		if (n === 1) {
 			var x0 = String((width / 2).toFixed(1)), y0 = String(((height - 4) - normalized[0] * (height - 8)).toFixed(1));
@@ -91,13 +130,17 @@
 		"memory.free": " MiB"
 	};
 
+	var SPARKLINE_SCALE = {
+		"utilization.gpu": 100,
+		"utilization.memory": 100
+	};
+
 	var LABEL_MAP = {
 		"utilization.gpu": "Util",
 		"utilization.memory": "DRAM",
 		"temperature.gpu": "Temp",
 		"power.draw": "Power",
-		"memory.used": "Used",
-		"memory.free": "Free"
+		"memory.used": "Memory"
 	};
 
 	function formatNumber(num, metric) {
@@ -128,7 +171,7 @@
 			for (var j = 0; j < COLUMNS.length; j++) {
 				var col = COLUMNS[j];
 				var val = values[j].replace(/^\s+|\s+$/g, "").trim();
-				if (col.parse === "number") {
+	if (col.parse === "number") {
 					entry[col.key] = { raw: val, value: parseFloat(val) };
 				} else {
 					entry[col.key] = { raw: val, value: val };
@@ -157,8 +200,17 @@
 		var displayMetrics = [
 			"utilization.gpu", "utilization.memory",
 			"temperature.gpu", "power.draw",
-			"memory.used", "memory.free"
+			"memory.used"
 		];
+
+		var powerLimit = 0;
+		if (metricsData["power.max_limit"] && metricsData["power.max_limit"].value > 0) {
+			powerLimit = metricsData["power.max_limit"].value;
+		}
+
+		var usedVal = (metricsData["memory.used"] && typeof metricsData["memory.used"].value === "number") ? metricsData["memory.used"].value : 0;
+		var freeVal = (metricsData["memory.free"] && typeof metricsData["memory.free"].value === "number") ? metricsData["memory.free"].value : 0;
+		var memScaleMax = usedVal + freeVal;
 
 		var html = '<div class="gpu-card">';
 		html += '  <div class="gpu-card-title">';
@@ -175,10 +227,54 @@
 			var valueStr = formatNumber(md.value, metricKey);
 			var colorClass = getColorClass(metricKey);
 			var unit = UNIT_MAP[metricKey] || "";
+			var sparkSvg;
 
-			var sparkValues = (hist[name] && hist[name][metricKey]) ? hist[name][metricKey] : null;
-			var sparkW = Math.round(cardWidth * 0.65) - 30;
-			var sparkSvg = createSparklineSvg(sparkValues, metricKey, colorClass, sparkW, 28);
+			if (metricKey === "utilization.gpu" || metricKey === "utilization.memory") {
+				var sparkHistory = (hist[name] && hist[name][metricKey]) ? hist[name][metricKey] : [];
+				if (sparkHistory.length > 0) {
+					sparkHistory = [].concat(sparkHistory);
+				} else {
+					sparkHistory = null;
+				}
+				var sparkW = Math.round(cardWidth * 0.65) - 30;
+				sparkSvg = createSparklineSvgByMax(sparkHistory, 100, colorClass, sparkW, 28);
+			} else if (metricKey === "power.draw" && powerLimit > 0) {
+				valueStr = formatNumber(md.value, metricKey) + '/' + formatNumber(powerLimit, metricKey);
+				unit = ' W';
+				var powerHistory = (hist[name] && hist[name]["power.draw"]) ? hist[name]["power.draw"] : [];
+				if (powerHistory.length > 0) {
+					powerHistory = [].concat(powerHistory);
+				} else {
+					powerHistory = null;
+				}
+				var sparkW = Math.round(cardWidth * 0.65) - 30;
+				sparkSvg = createSparklineSvgByMax(powerHistory, powerLimit, colorClass, sparkW, 28);
+			} else if (metricKey === "memory.used" && memScaleMax > 0) {
+				// Combined memory: display used/total, sparkline scale max = used + free
+				valueStr = formatNumber(usedVal, metricKey) + '/' + formatNumber(memScaleMax, metricKey);
+				unit = ' MiB';
+				var memHistory = (hist[name] && hist[name]["memory.used"]) ? hist[name]["memory.used"] : [];
+				if (memHistory.length > 0) {
+					memHistory = [].concat(memHistory);
+				} else {
+					memHistory = null;
+				}
+				var sparkW = Math.round(cardWidth * 0.65) - 30;
+				sparkSvg = createSparklineSvgByMax(memHistory, memScaleMax, colorClass, sparkW, 28);
+        } else if (metricKey === "temperature.gpu") {
+            var tempHistory = (hist[name] && hist[name]["temperature.gpu"]) ? hist[name]["temperature.gpu"] : [];
+            if (tempHistory.length > 0) {
+                tempHistory = [].concat(tempHistory);
+            } else {
+                tempHistory = null;
+            }
+            var sparkW = Math.round(cardWidth * 0.65) - 30;
+			sparkSvg = createSparklineSvgByMax(tempHistory, 95, colorClass, sparkW, 28);
+        } else {
+            var sparkValues = (hist[name] && hist[name][metricKey]) ? hist[name][metricKey] : null;
+            var sparkW = Math.round(cardWidth * 0.65) - 30;
+            sparkSvg = createSparklineSvg(sparkValues, metricKey, colorClass, sparkW, 28);
+        }
 
 			html += '  <div class="gpu-metric-row">';
 			html += '    <span class="metric-label">' + LABEL_MAP[metricKey] + '</span>';
@@ -225,7 +321,7 @@
 		var sl = document.getElementById("status-line");
 		if (sl) { sl.className = "sensor-status-line status-loading"; sl.textContent = "Loading NVIDIA GPU data ..."; }
 
-		cockpit.spawn(["/usr/bin/nvidia-smi", "--query-gpu=timestamp,name,utilization.gpu,utilization.memory,temperature.gpu,power.draw,memory.used,memory.free", "--format=csv,noheader,nounits"], {
+		cockpit.spawn(["/usr/bin/nvidia-smi", "--query-gpu=timestamp,name,utilization.gpu,utilization.memory,temperature.gpu,power.draw,power.max_limit,memory.used,memory.free", "--format=csv,noheader,nounits"], {
 			superuser: "root"
 		}).then(function(raw) {
 			var json = parseNvmlOutput(raw);
@@ -237,6 +333,9 @@
 					appendPoint(gpuName, "utilization.memory",     json[i]["utilization.memory"].value, hist);
 					appendPoint(gpuName, "temperature.gpu",        json[i]["temperature.gpu"].value,   hist);
 					appendPoint(gpuName, "power.draw",             json[i]["power.draw"].value,         hist);
+					if (json[i]["power.max_limit"] && json[i]["power.max_limit"].value > 0) {
+						json[i]["power.max_limit_raw"] = json[i]["power.max_limit"].value;
+					}
 					appendPoint(gpuName, "memory.used",            json[i]["memory.used"].value,        hist);
 					appendPoint(gpuName, "memory.free",            json[i]["memory.free"].value,        hist);
 				}
