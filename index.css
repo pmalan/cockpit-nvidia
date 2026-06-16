@@ -39,12 +39,16 @@
 .gpu-name { font-weight: 700; font-size: 0.95rem; }
 .gpu-timestamp { font-size: 0.75rem; color: #6a6e73; white-space: nowrap; margin-left: 1rem; }
 
-/* Dense metric rows - label/value left, sparkline right */
-.gpu-metrics { padding: 0 1rem 0.2rem; }
+/* Dense metric rows - fixed-column grid for alignment */
+.gpu-metrics {
+    padding: 0 1rem 0.2rem;
+    display: grid;
+    grid-template-columns: 64px 96px auto minmax(200px, 1fr);
+    column-gap: 8px;
+}
 
 .gpu-metric-row {
-    display: flex;
-    align-items: center;
+    display: contents;
     height: 30px;
     margin-top: 15px;
 }
@@ -53,30 +57,23 @@
     font-size: 0.7rem;
     font-weight: 600;
     color: #8b8f93;
-    width: 45px;
-    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .metric-value {
     font-weight: 700;
     font-size: 0.9rem;
-    width: 45px;
     text-align: right;
     margin-right: 2px;
+    white-space: nowrap;
 }
 
 .metric-unit {
     font-weight: 400;
     color: #6a6e73;
     font-size: 0.7rem;
-    width: 35px;
-    flex-shrink: 0;
-}
-
-.sparkline-wrapper {
-    flex: 1;
-    min-width: 200px;
-    margin-left: 8px;
+    white-space: nowrap;
+    padding-left: 1px;
 }
 
 .sparkline-svg {
