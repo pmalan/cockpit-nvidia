@@ -8,18 +8,6 @@ A cockpit-ws plugin that displays real-time NVIDIA GPU metrics (utilization, mem
 
 The NVIDIA proprietary driver must be installed. This plugin uses `nvidia-smi` — it will not work on systems without the driver.
 
-[source,bash]
-----
-# RHEL/CentOS stream
-sudo dnf install epel-release -y
-sudo dnf config-manager --set-enabled nux-dextop
-sudo dnf install nvidia-driver
-
-# Or download from https://www.nvidia.com/Download/index.aspx
-# After installation, reboot:
-sudo shutdown -r now
-----
-
 Verify the driver is loaded and `nvidia-smi` is available:
 
 [source,bash]
